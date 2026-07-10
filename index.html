@@ -112,7 +112,15 @@
   }
 
   #actions{
-    display:flex; gap:10px; justify-content:center;
+    display:flex; gap:10px; justify-content:center; align-items:center;
+  }
+  #sensitivity-readout{
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(238,242,240,0.75);
+    min-width: 44px;
+    text-align: center;
   }
   button{
     font-family: var(--sans);
@@ -190,6 +198,11 @@
     </div>
   </div>
   <div id="actions">
+    <button id="sensitivity-minus">－ Sensibilità</button>
+    <div id="sensitivity-readout">100%</div>
+    <button id="sensitivity-plus">＋ Sensibilità</button>
+  </div>
+  <div id="actions">
     <button id="calibrate-btn">Azzera calibrazione</button>
     <button id="switch-btn">Cambia fotocamera</button>
   </div>
@@ -213,8 +226,15 @@
   const switchBtn = document.getElementById('switch-btn');
 
   // Assumed vertical field of view of the camera feed in degrees.
-  // This is a reasonable default for phone rear cameras; not device-calibrated.
-  const ASSUMED_VFOV_DEG = 55;
+  // This varies by phone model, so it's user-adjustable and saved locally
+  // rather than a fixed guess. Larger value = less sensitive line movement.
+  const VFOV_MIN = 20, VFOV_MAX = 100, VFOV_DEFAULT = 55, VFOV_STEP = 5;
+  let assumedVFOV = parseFloat(localStorage.getItem('lineaQuota_vfov')) || VFOV_DEFAULT;
+
+  function updateSensitivityReadout(){
+    const pct = Math.round((VFOV_DEFAULT / assumedVFOV) * 100);
+    document.getElementById('sensitivity-readout').textContent = pct + '%';
+  }
 
   let currentFacing = 'environment';
   let currentStream = null;
@@ -358,7 +378,7 @@
     setStatus(orientationActive, orientationActive ? (goodPitch ? 'linea attiva' : 'inclinazione elevata') : 'sensori non disponibili');
 
     // pixels per degree based on assumed vertical FOV
-    const pxPerDeg = h / ASSUMED_VFOV_DEG;
+    const pxPerDeg = h / assumedVFOV;
     // Positive pitch (tilted up) should push the horizontal line DOWN on screen
     // because we're looking above the level line. Sign flipped to match the
     // actual accelerometer convention observed on device.
@@ -433,6 +453,20 @@
 
     requestAnimationFrame(render);
   });
+
+  document.getElementById('sensitivity-minus').addEventListener('click', () => {
+    assumedVFOV = Math.min(VFOV_MAX, assumedVFOV + VFOV_STEP);
+    localStorage.setItem('lineaQuota_vfov', assumedVFOV);
+    updateSensitivityReadout();
+  });
+
+  document.getElementById('sensitivity-plus').addEventListener('click', () => {
+    assumedVFOV = Math.max(VFOV_MIN, assumedVFOV - VFOV_STEP);
+    localStorage.setItem('lineaQuota_vfov', assumedVFOV);
+    updateSensitivityReadout();
+  });
+
+  updateSensitivityReadout();
 
   calibrateBtn.addEventListener('click', () => {
     if (smoothingInitialized){
