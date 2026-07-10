@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Linea di Quota — Orizzonte AR</title>
+<style>
+  :root{
+    --ink: #eef2f0;
+    --line: #ffb400;
+    --line-glow: rgba(255,180,0,0.45);
+    --panel: rgba(10,14,12,0.72);
+    --ok: #6bd98a;
+    --warn: #ff6b5e;
+    --mono: 'SF Mono', 'JetBrains Mono', 'Courier New', monospace;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
+  html,body{
+    margin:0; padding:0; width:100%; height:100%;
+    background:#000; overflow:hidden;
+    font-family: var(--sans); color: var(--ink);
+  }
+  #stage{
+    position:fixed; inset:0;
+  }
+  video{
+    position:absolute; inset:0; width:100%; height:100%;
+    object-fit: cover;
+    transform: scaleX(1);
+    background:#111;
+  }
+  svg#hud{
+    position:absolute; inset:0; width:100%; height:100%;
+    pointer-events:none;
+  }
+  .horizon-line{
+    stroke: var(--line);
+    stroke-width: 2.5;
+    filter: drop-shadow(0 0 6px var(--line-glow));
+  }
+  .horizon-tick{
+    stroke: var(--line);
+    stroke-width: 2;
+  }
+  .horizon-label{
+    fill: var(--line);
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+  }
+  .center-mark{
+    stroke: rgba(238,242,240,0.55);
+    stroke-width: 1.5;
+    stroke-dasharray: 3 5;
+  }
+
+  #topbar{
+    position:fixed; top:0; left:0; right:0;
+    padding: max(14px, env(safe-area-inset-top)) 16px 12px 16px;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.65), transparent);
+    display:flex; align-items:center; justify-content:space-between;
+    z-index:5;
+  }
+  #brand{
+    font-family: var(--mono);
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(238,242,240,0.85);
+  }
+  #brand b{ color: var(--line); font-weight:700; }
+
+  #status-pill{
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 5px 10px;
+    border-radius: 100px;
+    background: var(--panel);
+    border: 1px solid rgba(255,255,255,0.12);
+    display:flex; align-items:center; gap:6px;
+  }
+  #status-dot{
+    width:7px; height:7px; border-radius:50%;
+    background: var(--warn);
+    transition: background 0.3s;
+  }
+  #status-dot.ok{ background: var(--ok); }
+
+  #bottombar{
+    position:fixed; bottom:0; left:0; right:0;
+    padding: 14px 16px max(18px, env(safe-area-inset-bottom)) 16px;
+    background: linear-gradient(to top, rgba(0,0,0,0.75), transparent);
+    z-index:5;
+    display:flex; flex-direction:column; gap:12px;
+  }
+  #readout{
+    display:flex; justify-content:center; gap:18px;
+    font-family: var(--mono);
+  }
+  .stat{
+    text-align:center;
+  }
+  .stat .val{
+    font-size:22px; font-weight:700; color: var(--line);
+    font-variant-numeric: tabular-nums;
+  }
+  .stat .lbl{
+    font-size:10px; text-transform:uppercase; letter-spacing:0.08em;
+    color: rgba(238,242,240,0.55); margin-top:2px;
+  }
+
+  #actions{
+    display:flex; gap:10px; justify-content:center;
+  }
+  button{
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 600;
+    padding: 11px 18px;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.14);
+    background: var(--panel);
+    color: var(--ink);
+    backdrop-filter: blur(6px);
+  }
+  button:active{ background: rgba(255,255,255,0.14); }
+  button.primary{
+    background: var(--line);
+    color: #1a1200;
+    border-color: transparent;
+  }
+
+  #overlay-screen{
+    position:fixed; inset:0; z-index:20;
+    background: #06100a;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding: 32px;
+    text-align:center;
+  }
+  #overlay-screen h1{
+    font-size: 22px; margin: 0 0 8px 0; letter-spacing:-0.01em;
+  }
+  #overlay-screen h1 span{ color: var(--line); }
+  #overlay-screen p{
+    font-size: 14px; line-height:1.5; color: rgba(238,242,240,0.7);
+    max-width: 360px; margin: 0 0 22px 0;
+  }
+  #overlay-screen .icon{
+    font-size: 40px; margin-bottom: 18px;
+  }
+  #err-msg{
+    font-family: var(--mono); font-size:12px; color: var(--warn);
+    max-width: 320px; margin-top:16px; display:none;
+  }
+
+  .hidden{ display:none !important; }
+</style>
+</head>
+<body>
+
+<div id="overlay-screen">
+  <div class="icon">📐</div>
+  <h1>Linea di <span>Quota</span></h1>
+  <p>Traccia in tempo reale una linea sempre orizzontale rispetto alla direzione reale, indipendentemente da come inclini il telefono. Il punto in cui tocca il pendio davanti a te è, in prima approssimazione, alla tua stessa altitudine.</p>
+  <button class="primary" id="start-btn">Attiva fotocamera</button>
+  <div id="err-msg"></div>
+</div>
+
+<div id="stage" class="hidden">
+  <video id="cam" autoplay playsinline muted></video>
+  <svg id="hud"></svg>
+</div>
+
+<div id="topbar" class="hidden">
+  <div id="brand"><b>◤</b> Linea di Quota</div>
+  <div id="status-pill"><div id="status-dot"></div><span id="status-text">calibrazione…</span></div>
+</div>
+
+<div id="bottombar" class="hidden">
+  <div id="readout">
+    <div class="stat">
+      <div class="val" id="pitch-val">0.0°</div>
+      <div class="lbl">Beccheggio</div>
+    </div>
+    <div class="stat">
+      <div class="val" id="roll-val">0.0°</div>
+      <div class="lbl">Rollio</div>
+    </div>
+  </div>
+  <div id="actions">
+    <button id="calibrate-btn">Azzera calibrazione</button>
+    <button id="switch-btn">Cambia fotocamera</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  const video = document.getElementById('cam');
+  const hud = document.getElementById('hud');
+  const startBtn = document.getElementById('start-btn');
+  const overlayScreen = document.getElementById('overlay-screen');
+  const stage = document.getElementById('stage');
+  const topbar = document.getElementById('topbar');
+  const bottombar = document.getElementById('bottombar');
+  const errMsg = document.getElementById('err-msg');
+  const statusDot = document.getElementById('status-dot');
+  const statusText = document.getElementById('status-text');
+  const pitchVal = document.getElementById('pitch-val');
+  const rollVal = document.getElementById('roll-val');
+  const calibrateBtn = document.getElementById('calibrate-btn');
+  const switchBtn = document.getElementById('switch-btn');
+
+  // Assumed vertical field of view of the camera feed in degrees.
+  // This is a reasonable default for phone rear cameras; not device-calibrated.
+  const ASSUMED_VFOV_DEG = 55;
+
+  let currentFacing = 'environment';
+  let currentStream = null;
+  let pitchOffset = 0; // calibration offset in degrees
+  let orientationActive = false;
+
+  // Smoothed pitch/roll in degrees, derived from raw accelerometer (gravity) vector.
+  // We avoid the browser's alpha/beta/gamma Euler decomposition entirely: that
+  // representation has a mathematical singularity almost exactly at "phone held
+  // vertical", which is the normal position for this app, causing the jitter/spin.
+  let smoothedPitch = 0;
+  let smoothedRoll = 0;
+  let smoothingInitialized = false;
+  const SMOOTHING = 0.12; // lower = smoother but laggier, higher = snappier but noisier
+
+  function ns(tag){ return document.createElementNS('http://www.w3.org/2000/svg', tag); }
+
+  function setStatus(ok, text){
+    statusDot.classList.toggle('ok', ok);
+    statusText.textContent = text;
+  }
+
+  async function startCamera(facing){
+    if (currentStream){
+      currentStream.getTracks().forEach(t => t.stop());
+    }
+    try{
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: facing } },
+        audio: false
+      });
+      currentStream = stream;
+      video.srcObject = stream;
+      return true;
+    }catch(e){
+      showError('Impossibile accedere alla fotocamera: ' + e.message);
+      return false;
+    }
+  }
+
+  function showError(msg){
+    errMsg.style.display = 'block';
+    errMsg.textContent = msg;
+  }
+
+  async function requestOrientationPermission(){
+    let ok = true;
+    if (typeof DeviceMotionEvent !== 'undefined' &&
+        typeof DeviceMotionEvent.requestPermission === 'function'){
+      try{
+        const res = await DeviceMotionEvent.requestPermission();
+        ok = ok && (res === 'granted');
+      }catch(e){
+        ok = false;
+      }
+    }
+    if (typeof DeviceOrientationEvent !== 'undefined' &&
+        typeof DeviceOrientationEvent.requestPermission === 'function'){
+      try{
+        await DeviceOrientationEvent.requestPermission();
+      }catch(e){ /* not required for our calculation, ignore */ }
+    }
+    return ok;
+  }
+
+  function getScreenAngle(){
+    if (screen.orientation && typeof screen.orientation.angle === 'number'){
+      return screen.orientation.angle;
+    }
+    if (typeof window.orientation === 'number'){
+      return window.orientation;
+    }
+    return 0;
+  }
+
+  function handleMotion(e){
+    const g = e.accelerationIncludingGravity;
+    if (!g || g.x === null || g.y === null || g.z === null) return;
+    const gx = g.x, gy = g.y, gz = g.z;
+
+    // Rotate the accelerometer's x/y readings back into "portrait" reference
+    // frame based on how the screen is currently held (portrait vs landscape),
+    // so the roll calculation is correct no matter how the phone is oriented.
+    const angle = getScreenAngle();
+    let ux, uy;
+    if (angle === 90){
+      ux = -gy; uy = gx;
+    } else if (angle === -90 || angle === 270){
+      ux = gy; uy = -gx;
+    } else if (angle === 180){
+      ux = -gx; uy = -gy;
+    } else {
+      ux = gx; uy = gy;
+    }
+
+    // Phone held in portrait, rear camera pointed roughly horizontally:
+    // pitch = angle of the camera axis away from horizontal (0 = level)
+    // roll  = rotation about the camera's forward axis (phone tilted sideways)
+    // Computed straight from the gravity vector, so there is no Euler-angle
+    // singularity near the vertical "holding it up to look through it" pose.
+    // Note: pitch uses sqrt(ux^2+uy^2), which is unaffected by screen rotation,
+    // only roll needs the axis correction above.
+    const rawPitch = Math.atan2(gz, Math.sqrt(ux*ux + uy*uy)) * 180 / Math.PI;
+    const rawRoll = Math.atan2(-ux, uy) * 180 / Math.PI;
+
+    if (!smoothingInitialized){
+      smoothedPitch = rawPitch;
+      smoothedRoll = rawRoll;
+      smoothingInitialized = true;
+    } else {
+      smoothedPitch += SMOOTHING * (rawPitch - smoothedPitch);
+      // handle roll wrap-around at +-180 so it doesn't jump the long way round
+      let rollDelta = rawRoll - smoothedRoll;
+      if (rollDelta > 180) rollDelta -= 360;
+      if (rollDelta < -180) rollDelta += 360;
+      smoothedRoll += SMOOTHING * rollDelta;
+    }
+    orientationActive = true;
+  }
+
+  function computePitchDeg(){
+    return smoothedPitch - pitchOffset;
+  }
+
+  function computeRollDeg(){
+    return smoothedRoll;
+  }
+
+  function render(){
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    hud.setAttribute('viewBox', `0 0 ${w} ${h}`);
+
+    const pitch = computePitchDeg();
+    const roll = computeRollDeg();
+
+    pitchVal.textContent = Math.round(pitch) + '°';
+    rollVal.textContent = Math.round(roll) + '°';
+
+    const goodPitch = Math.abs(pitch) < 25;
+    setStatus(orientationActive, orientationActive ? (goodPitch ? 'linea attiva' : 'inclinazione elevata') : 'sensori non disponibili');
+
+    // pixels per degree based on assumed vertical FOV
+    const pxPerDeg = h / ASSUMED_VFOV_DEG;
+    // Positive pitch (tilted up) should push the horizontal line DOWN on screen
+    // because we're looking above the level line. Sign flipped to match the
+    // actual accelerometer convention observed on device.
+    const yOffset = -pitch * pxPerDeg;
+    const centerY = h / 2 + yOffset;
+
+    hud.innerHTML = '';
+
+    // group rotated by roll around screen center, to keep the line visually level with gravity
+    const g = ns('g');
+    g.setAttribute('transform', `rotate(${-roll} ${w/2} ${h/2})`);
+
+    const lineLen = Math.max(w, h) * 1.6;
+    const x1 = w/2 - lineLen/2;
+    const x2 = w/2 + lineLen/2;
+
+    const line = ns('line');
+    line.setAttribute('x1', x1);
+    line.setAttribute('y1', centerY);
+    line.setAttribute('x2', x2);
+    line.setAttribute('y2', centerY);
+    line.setAttribute('class', 'horizon-line');
+    g.appendChild(line);
+
+    // tick marks every ~10% of width
+    for (let i = -4; i <= 4; i++){
+      const tx = w/2 + (i * w/9);
+      const tick = ns('line');
+      tick.setAttribute('x1', tx);
+      tick.setAttribute('y1', centerY - 8);
+      tick.setAttribute('x2', tx);
+      tick.setAttribute('y2', centerY + 8);
+      tick.setAttribute('class', 'horizon-tick');
+      g.appendChild(tick);
+    }
+
+    hud.appendChild(g);
+
+    // center crosshair, screen-fixed (not rotated) as a reference for phone-forward direction
+    const cross = ns('line');
+    cross.setAttribute('x1', w/2 - 14);
+    cross.setAttribute('y1', h/2);
+    cross.setAttribute('x2', w/2 + 14);
+    cross.setAttribute('y2', h/2);
+    cross.setAttribute('class', 'center-mark');
+    hud.appendChild(cross);
+    const cross2 = ns('line');
+    cross2.setAttribute('x1', w/2);
+    cross2.setAttribute('y1', h/2 - 14);
+    cross2.setAttribute('x2', w/2);
+    cross2.setAttribute('y2', h/2 + 14);
+    cross2.setAttribute('class', 'center-mark');
+    hud.appendChild(cross2);
+
+    requestAnimationFrame(render);
+  }
+
+  startBtn.addEventListener('click', async () => {
+    const orientOk = await requestOrientationPermission();
+    if (!orientOk){
+      showError('Permesso sensori negato. Su iOS: Impostazioni > Safari > Movimento e orientamento.');
+    }
+    window.addEventListener('devicemotion', handleMotion, true);
+
+    const camOk = await startCamera(currentFacing);
+    if (!camOk) return;
+
+    overlayScreen.classList.add('hidden');
+    stage.classList.remove('hidden');
+    topbar.classList.remove('hidden');
+    bottombar.classList.remove('hidden');
+
+    requestAnimationFrame(render);
+  });
+
+  calibrateBtn.addEventListener('click', () => {
+    if (smoothingInitialized){
+      pitchOffset = smoothedPitch;
+    }
+  });
+
+  switchBtn.addEventListener('click', async () => {
+    currentFacing = currentFacing === 'environment' ? 'user' : 'environment';
+    await startCamera(currentFacing);
+  });
+
+  window.addEventListener('resize', () => {});
+})();
+</script>
+
+</body>
+</html>
