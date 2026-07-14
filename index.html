@@ -8,6 +8,15 @@
 <link rel="icon" href="./icon-192.png">
 <link rel="apple-touch-icon" href="./icon-192.png">
 <meta name="theme-color" content="#06100a">
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').catch(() => {
+        // Non-fatal: app still works online without offline caching.
+      });
+    });
+  }
+</script>
 <style>
   :root{
     --ink: #eef2f0;
@@ -42,10 +51,20 @@
     stroke: var(--line);
     stroke-width: 2.5;
     filter: drop-shadow(0 0 6px var(--line-glow));
+    transition: stroke-width 0.15s ease, filter 0.15s ease;
+  }
+  .horizon-line.aligned{
+    stroke: #fff6dd;
+    stroke-width: 3.5;
+    filter: drop-shadow(0 0 12px var(--line)) drop-shadow(0 0 4px #ffffff);
   }
   .horizon-tick{
     stroke: var(--line);
     stroke-width: 2;
+    transition: stroke 0.15s ease;
+  }
+  .horizon-tick.aligned{
+    stroke: #fff6dd;
   }
   .horizon-label{
     fill: var(--line);
@@ -381,6 +400,9 @@
     const goodPitch = Math.abs(pitch) < 25;
     setStatus(orientationActive, orientationActive ? (goodPitch ? 'linea attiva' : 'inclinazione elevata') : 'sensori non disponibili');
 
+    // Aligned = phone held level on both axes within tolerance (-0.99..0.99°)
+    const isAligned = Math.abs(pitch) < 1 && Math.abs(roll) < 1;
+
     // pixels per degree based on assumed vertical FOV
     const pxPerDeg = h / assumedVFOV;
     // Positive pitch (tilted up) should push the horizontal line DOWN on screen
@@ -404,7 +426,7 @@
     line.setAttribute('y1', centerY);
     line.setAttribute('x2', x2);
     line.setAttribute('y2', centerY);
-    line.setAttribute('class', 'horizon-line');
+    line.setAttribute('class', 'horizon-line' + (isAligned ? ' aligned' : ''));
     g.appendChild(line);
 
     // tick marks every ~10% of width
@@ -415,17 +437,19 @@
       tick.setAttribute('y1', centerY - 8);
       tick.setAttribute('x2', tx);
       tick.setAttribute('y2', centerY + 8);
-      tick.setAttribute('class', 'horizon-tick');
+      tick.setAttribute('class', 'horizon-tick' + (isAligned ? ' aligned' : ''));
       g.appendChild(tick);
     }
 
     hud.appendChild(g);
 
-    // center crosshair, screen-fixed (not rotated) as a reference for phone-forward direction
+    // Screen-fixed white dashed reference: full-width horizontal line marking
+    // true screen center, plus a short vertical tick at its midpoint.
+    const refLineLen = Math.max(w, h) * 1.6;
     const cross = ns('line');
-    cross.setAttribute('x1', w/2 - 14);
+    cross.setAttribute('x1', w/2 - refLineLen/2);
     cross.setAttribute('y1', h/2);
-    cross.setAttribute('x2', w/2 + 14);
+    cross.setAttribute('x2', w/2 + refLineLen/2);
     cross.setAttribute('y2', h/2);
     cross.setAttribute('class', 'center-mark');
     hud.appendChild(cross);
