@@ -1,10 +1,11 @@
 // Service worker for "Linea di Quota" — enables offline use.
-// Strategy: cache-first for the app shell. Since this app never calls the
-// network for anything (camera + motion sensors are local device APIs),
-// once these files are cached the app works fully offline, e.g. in the
-// mountains without signal.
+// Strategy: NETWORK-FIRST. Always try to fetch the latest version online
+// (so updates published to GitHub show up immediately); only fall back to
+// the cached copy when there's no connection, e.g. in the mountains.
+// Bump CACHE_NAME whenever you want to force a clean cache (rare need with
+// network-first, but harmless).
 
-const CACHE_NAME = 'linea-quota-v1';
+const CACHE_NAME = 'linea-quota-v2';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -35,18 +36,14 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request)
-        .then((response) => {
-          // Cache a copy of anything successfully fetched, for next time.
-          if (response && response.status === 200) {
-            const copy = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-          }
-          return response;
-        })
-        .catch(() => cached); // if offline and not cached, this will just fail
-    })
+    fetch(event.request)
+      .then((response) => {
+        if (response && response.status === 200) {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        }
+        return response;
+      })
+      .catch(() => caches.match(event.request))
   );
 });
