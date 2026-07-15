@@ -54,9 +54,9 @@
     transition: stroke-width 0.15s ease, filter 0.15s ease;
   }
   .horizon-line.aligned{
-    stroke: #fff6dd;
-    stroke-width: 10;
-    filter: drop-shadow(0 0 8px var(--line)) drop-shadow(0 0 4px #ffffff);
+    stroke: #ff3b30;
+    stroke-width: 3;
+    filter: drop-shadow(0 0 3px #ff3b30);
   }
   .horizon-tick{
     stroke: var(--line);
@@ -64,7 +64,7 @@
     transition: stroke 0.15s ease;
   }
   .horizon-tick.aligned{
-    stroke: #fff6dd;
+    stroke: #ff3b30;
   }
   .horizon-label{
     fill: var(--line);
@@ -429,17 +429,14 @@
     line.setAttribute('class', 'horizon-line' + (isAligned ? ' aligned' : ''));
     g.appendChild(line);
 
-    // tick marks every ~10% of width
-    for (let i = -4; i <= 4; i++){
-      const tx = w/2 + (i * w/9);
-      const tick = ns('line');
-      tick.setAttribute('x1', tx);
-      tick.setAttribute('y1', centerY - 8);
-      tick.setAttribute('x2', tx);
-      tick.setAttribute('y2', centerY + 8);
-      tick.setAttribute('class', 'horizon-tick' + (isAligned ? ' aligned' : ''));
-      g.appendChild(tick);
-    }
+    // single central vertical tick, marking the exact center of the line
+    const tick = ns('line');
+    tick.setAttribute('x1', w/2);
+    tick.setAttribute('y1', centerY - 10);
+    tick.setAttribute('x2', w/2);
+    tick.setAttribute('y2', centerY + 10);
+    tick.setAttribute('class', 'horizon-tick' + (isAligned ? ' aligned' : ''));
+    g.appendChild(tick);
 
     hud.appendChild(g);
 
